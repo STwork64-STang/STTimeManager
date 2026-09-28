@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ChronoFlow - Priority Task Manager</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f0f13',
+                        cardBg: '#16161c',
+                        innerBg: '#1e1e26',
+                        accentRose: '#f43f5e',
+                        accentAmber: '#f59e0b',
+                        accentEmerald: '#10b981',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- React & React DOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel CDN for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            background-color: #0f0f13;
+            color: #f1f5f9;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #16161c;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a36;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f52;
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Mock Initial Data
+        const INITIAL_TASKS = [
+          {
+            id: 't1',
+            title: 'เคลียร์สไลด์นำเสนอโปรเจกต์ลูกค้า',
+            hours: 2,
+            minutes: 30,
+            priority: 'high', // high, medium, low
+            outcome: 'ลูกค้าประทับใจ เข้าใจภาพรวมโปรเจกต์ชัดเจน และปิดการขายได้สำเร็จ',
+            completed: false,
+            order: 0,
+            checklist: [
+              { id: 'c1', text: 'สรุปหัวข้อสำคัญ 5 ข้อ', done: true },
+              { id: 'c2', text: 'ออกแบบสไลด์สรุปงบประมาณ', done: true },
+              { id: 'c3', text: 'ซ้อมพูดพรีเซนต์ 1 รอบ', done: false }
+            ]
+          },
+          {
+            id: 't2',
+            title: 'ออกแบบ UI แอปพลิเคชันบริหารเวลา',
+            hours: 1,
+            minutes: 45,
+            priority: 'high',
+            outcome: 'ได้ต้นแบบหน้าตาแอปที่สวยงาม ใช้งานง่ายทั้งบนมือถือและคอม',
+            completed: false,
+            order: 1,
+            checklist: [
+              { id: 'c4', text: 'กำหนดจานสี Dark Mode', done: true },
+              { id: 'c5', text: 'เพิ่มระบบ Drag & Drop / Reorder', done: true }
+            ]
+          },
+          {
+            id: 't3',
+            title: 'ออกกำลังกายยืดสาย Cardio เบาๆ',
+            hours: 0,
+            minutes: 45,
+            priority: 'medium',
+            outcome: 'ร่างกายสดชื่น ลดอาการปวดหลังจากการนั่งทำงานนาน',
+            completed: true,
+            order: 0,
+            checklist: [
+              { id: 'c6', text: 'ยืดเหยียด 10 นาที', done: true },
+              { id: 'c7', text: 'วิ่งลู่หรือคาดิโอ 30 นาที', done: true }
+            ]
+          },
+          {
+            id: 't4',
+            title: 'อ่านหนังสือบริหารเวลา (Time Management in 30M)',
+            hours: 0,
+            minutes: 30,
+            priority: 'low',
+            outcome: 'ได้เทคนิคการจัดลำดับความสำคัญงานไปปรับใช้ในชีวิตประจำวัน',
+            completed: false,
+            order: 0,
+            checklist: [
+              { id: 'c8', text: 'สรุป 3 เทคนิคสำคัญลงโน้ต', done: false }
+            ]
+          }
+        ];
+
+        // Priority Group Meta Data
+        const PRIORITY_GROUPS = {
+          high: {
+            id: 'high',
+            title: 'ด่วนและสำคัญมาก (High Priority)',
+            badgeBg: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+            borderColor: 'border-rose-500/40',
+            dotColor: 'bg-rose-500',
+            accentColor: 'rose',
+            icon: 'alert-triangle'
+          },
+          medium: {
+            id: 'medium',
+            title: 'สำคัญปานกลาง (Medium Priority)',
+            badgeBg: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+            borderColor: 'border-amber-500/40',
+            dotColor: 'bg-amber-500',
+            accentColor: 'amber',
+            icon: 'clock'
+          },
+          low: {
+            id: 'low',
+            title: 'ทั่วไป / สำคัญน้อย (Low Priority)',
+            badgeBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+            borderColor: 'border-emerald-500/40',
+            dotColor: 'bg-emerald-500',
+            accentColor: 'emerald',
+            icon: 'check-circle'
+          }
+        };
+
+        function App() {
+          const [tasks, setTasks] = useState(() => {
+            const saved = localStorage.getItem('chrono_flow_tasks_v2');
+            return saved ? JSON.parse(saved) : INITIAL_TASKS;
+          });
+
+          const [isModalOpen, setIsModalOpen] = useState(false);
+          const [editingTask, setEditingTask] = useState(null);
+
+          // Form State
+          const [formData, setFormData] = useState({
+            title: '',
+            hours: 1,
+            minutes: 0,
+            priority: 'high',
+            outcome: '',
+            checklist: []
+          });
+
+          const [newChecklistText, setNewChecklistText] = useState('');
+
+          useEffect(() => {
+            localStorage.setItem('chrono_flow_tasks_v2', JSON.stringify(tasks));
+            // Trigger Lucide Icon Render
+            if (window.lucide) {
+              window.lucide.createIcons();
+            }
+          }, [tasks, isModalOpen]);
+
+          // Calculate total time
+          const totalEstimatedTime = useMemo(() => {
+            let totalMins = tasks
+              .filter(t => !t.completed)
+              .reduce((acc, t) => acc + (parseInt(t.hours || 0) * 60) + parseInt(t.minutes || 0), 0);
+            
+            const h = Math.floor(totalMins / 60);
+            const m = totalMins % 60;
+            return { hours: h, minutes: m };
+          }, [tasks]);
+
+          // Completion rate
+          const progressPercent = useMemo(() => {
+            if (tasks.length === 0) return 0;
+            const completed = tasks.filter(t => t.completed).length;
+            return Math.round((completed / tasks.length) * 100);
+          }, [tasks]);
+
+          // Move Task Up or Down inside same Priority Group
+          const moveTaskOrder = (taskId, direction) => {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            // Get all tasks in same priority group sorted by order
+            const groupTasks = tasks
+              .filter(t => t.priority === task.priority)
+              .sort((a, b) => a.order - b.order);
+
+            const currentIndex = groupTasks.findIndex(t => t.id === taskId);
+            const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+            if (targetIndex < 0 || targetIndex >= groupTasks.length) return; // Out of bounds
+
+            const targetTask = groupTasks[targetIndex];
+
+            // Swap order values
+            const updatedTasks = tasks.map(t => {
+              if (t.id === task.id) return { ...t, order: targetTask.order };
+              if (t.id === targetTask.id) return { ...t, order: task.order };
+              return t;
+            });
+
+            setTasks(updatedTasks);
+          };
+
+          // Toggle task complete status
+          const toggleTaskComplete = (taskId) => {
+            setTasks(tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t));
+          };
+
+          // Toggle subtask checklist item
+          const toggleSubtask = (taskId, subtaskId) => {
+            setTasks(tasks.map(t => {
+              if (t.id === taskId) {
+                const newChecklist = t.checklist.map(c => c.id === subtaskId ? { ...c, done: !c.done } : c);
+                return { ...t, checklist: newChecklist };
+              }
+              return t;
+            }));
+          };
+
+          // Open Modal for Create or Edit
+          const handleOpenModal = (taskToEdit = null, defaultPriority = 'high') => {
+            if (taskToEdit) {
+              setEditingTask(taskToEdit);
+              setFormData({ ...taskToEdit });
+            } else {
+              setEditingTask(null);
+              setFormData({
+                title: '',
+                hours: 1,
+                minutes: 0,
+                priority: defaultPriority,
+                outcome: '',
+                checklist: []
+              });
+            }
+            setIsModalOpen(true);
+          };
+
+          // Add checklist item to form
+          const handleAddChecklist = () => {
+            if (!newChecklistText.trim()) return;
+            setFormData({
+              ...formData,
+              checklist: [
+                ...formData.checklist,
+                { id: 'c_' + Date.now(), text: newChecklistText.trim(), done: false }
+              ]
+            });
+            setNewChecklistText('');
+          };
+
+          // Remove checklist item from form
+          const handleRemoveChecklist = (id) => {
+            setFormData({
+              ...formData,
+              checklist: formData.checklist.filter(c => c.id !== id)
+            });
+          };
+
+          // Save Task
+          const handleSaveTask = (e) => {
+            e.preventDefault();
+            if (!formData.title.trim()) return;
+
+            if (editingTask) {
+              // Edit existing
+              setTasks(tasks.map(t => t.id === editingTask.id ? { ...formData, id: editingTask.id, completed: editingTask.completed, order: editingTask.order } : t));
+            } else {
+              // Get max order in this priority group
+              const sameGroup = tasks.filter(t => t.priority === formData.priority);
+              const maxOrder = sameGroup.length > 0 ? Math.max(...sameGroup.map(t => t.order || 0)) : -1;
+
+              const newTask = {
+                ...formData,
+                id: 't_' + Date.now(),
+                completed: false,
+                order: maxOrder + 1
+              };
+              setTasks([...tasks, newTask]);
+            }
+            setIsModalOpen(false);
+          };
+
+          // Delete Task
+          const handleDeleteTask = (taskId) => {
+            if (confirm('คุณต้องการลบงานนี้ใช่หรือไม่?')) {
+              setTasks(tasks.filter(t => t.id !== taskId));
+            }
+          };
+
+          return (
+            <div className="min-h-screen pb-20">
+              
+              {/* Header Navigation */}
+              <header className="sticky top-0 z-30 bg-[#16161c]/90 backdrop-blur-md border-b border-slate-800 px-4 py-3.5">
+                <div className="max-w-4xl mx-auto flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-950/50">
+                      <i data-lucide="clock" className="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                      <h1 className="font-bold text-lg leading-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                        ChronoFlow
+                      </h1>
+                      <p className="text-[11px] text-rose-400 font-medium">Task Ranking & Duration</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenModal(null, 'high')}
+                    className="px-3.5 py-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-medium text-xs rounded-xl shadow-lg shadow-rose-950/40 flex items-center gap-1.5 transition active:scale-95"
+                  >
+                    <i data-lucide="plus" className="w-4 h-4"></i>
+                    <span>สร้างงานใหม่</span>
+                  </button>
+                </div>
+              </header>
+
+              {/* Main Content Area */}
+              <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
+                
+                {/* Stats Dashboard Card */}
+                <div className="bg-[#16161c] border border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                    
+                    {/* Time Estimation */}
+                    <div className="flex items-center gap-3.5 bg-[#1a1a23] p-3.5 rounded-xl border border-slate-800/60">
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <i data-lucide="hourglass" className="w-5 h-5"></i>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-400">เวลารวมงานคงเหลือวันนี้</div>
+                        <div className="text-base font-bold text-slate-100 font-mono mt-0.5">
+                          {totalEstimatedTime.hours > 0 && `${totalEstimatedTime.hours} ชม. `}
+                          {totalEstimatedTime.minutes} นาที
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="bg-[#1a1a23] p-3.5 rounded-xl border border-slate-800/60">
+                      <div className="flex justify-between items-center text-xs mb-2">
+                        <span className="text-slate-400">ความคืบหน้า</span>
+                        <span className="text-rose-400 font-bold">{progressPercent}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 h-full transition-all duration-500 ease-out"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1.5 text-right">
+                        เสร็จแล้ว {tasks.filter(t => t.completed).length} จาก {tasks.length} รายการ
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Priority Groups List */}
+                {Object.keys(PRIORITY_GROUPS).map(priorityKey => {
+                  const groupConfig = PRIORITY_GROUPS[priorityKey];
+                  
+                  // Filter and sort tasks for this priority group
+                  const groupTasks = tasks
+                    .filter(t => t.priority === priorityKey)
+                    .sort((a, b) => a.order - b.order);
+
+                  return (
+                    <div key={priorityKey} className="space-y-3">
+                      
+                      {/* Priority Group Section Title */}
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-3 h-3 rounded-full ${groupConfig.dotColor} shadow-sm shadow-black`}></span>
+                          <h2 className="text-sm font-bold text-slate-200 tracking-wide">
+                            {groupConfig.title}
+                          </h2>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                            {groupTasks.length}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleOpenModal(null, priorityKey)}
+                          className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1 transition"
+                        >
+                          <i data-lucide="plus-circle" className="w-3.5 h-3.5"></i>
+                          <span>เพิ่มงานในกลุ่มนี้</span>
+                        </button>
+                      </div>
+
+                      {/* Empty Group State */}
+                      {groupTasks.length === 0 && (
+                        <div className="border border-dashed border-slate-800/80 rounded-xl p-4 text-center text-xs text-slate-500">
+                          ไม่มีงานในกลุ่มความสำคัญนี้
+                        </div>
+                      )}
+
+                      {/* Task Cards in this Priority Group */}
+                      <div className="space-y-3">
+                        {groupTasks.map((task, index) => {
+                          const isFirst = index === 0;
+                          const isLast = index === groupTasks.length - 1;
+
+                          return (
+                            <div 
+                              key={task.id}
+                              className={`bg-[#16161c] border rounded-2xl p-4 transition-all duration-200 ${
+                                task.completed 
+                                  ? 'border-slate-800/50 opacity-60 bg-[#121217]' 
+                                  : `${groupConfig.borderColor} hover:border-slate-700 shadow-lg`
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                
+                                {/* Up / Down Order Buttons (Rank Modifier) */}
+                                <div className="flex flex-col items-center gap-1 pt-1 shrink-0">
+                                  <button
+                                    onClick={() => moveTaskOrder(task.id, 'up')}
+                                    disabled={isFirst}
+                                    className={`p-1 rounded bg-slate-800/80 transition ${
+                                      isFirst 
+                                        ? 'text-slate-700 cursor-not-allowed opacity-30' 
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-700 active:scale-95'
+                                    }`}
+                                    title="เลื่อนขึ้นข้างบน"
+                                  >
+                                    <i data-lucide="chevron-up" className="w-4 h-4"></i>
+                                  </button>
+
+                                  <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                                    #{index + 1}
+                                  </span>
+
+                                  <button
+                                    onClick={() => moveTaskOrder(task.id, 'down')}
+                                    disabled={isLast}
+                                    className={`p-1 rounded bg-slate-800/80 transition ${
+                                      isLast 
+                                        ? 'text-slate-700 cursor-not-allowed opacity-30' 
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-700 active:scale-95'
+                                    }`}
+                                    title="เลื่อนลงข้างล่าง"
+                                  >
+                                    <i data-lucide="chevron-down" className="w-4 h-4"></i>
+                                  </button>
+                                </div>
+
+                                {/* Task Details Body */}
+                                <div className="flex-1 min-w-0">
+                                  
+                                  {/* Top Row: Duration & Complete Circle */}
+                                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                                    
+                                    {/* Duration Badge */}
+                                    <div className="flex items-center gap-1.5 text-xs font-mono font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                                      <i data-lucide="timer" className="w-3.5 h-3.5"></i>
+                                      <span>
+                                        ระยะเวลา: {task.hours > 0 && `${task.hours} ชม. `}{task.minutes} นาที
+                                      </span>
+                                    </div>
+
+                                    {/* Complete Toggle Button */}
+                                    <button
+                                      onClick={() => toggleTaskComplete(task.id)}
+                                      className="text-slate-400 hover:text-rose-400 transition p-1"
+                                      title={task.completed ? "ทำยังไม่เสร็จ" : "กดเพื่อเสร็จสิ้นงาน"}
+                                    >
+                                      {task.completed ? (
+                                        <i data-lucide="check-circle-2" className="w-6 h-6 text-rose-500 fill-rose-500/20"></i>
+                                      ) : (
+                                        <i data-lucide="circle" className="w-6 h-6 text-slate-500 hover:text-amber-400"></i>
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {/* Task Title */}
+                                  <h3 className={`text-base font-semibold ${
+                                    task.completed ? 'line-through text-slate-500' : 'text-slate-100'
+                                  }`}>
+                                    {task.title}
+                                  </h3>
+
+                                  {/* Outcome Box */}
+                                  {task.outcome && (
+                                    <div className="mt-2.5 p-2.5 bg-rose-500/5 border border-rose-500/15 rounded-xl text-xs text-rose-300/90 flex items-start gap-2">
+                                      <i data-lucide="zap" className="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
+                                      <div>
+                                        <span className="font-semibold text-rose-400 mr-1">ผลลัพธ์ที่จะเกิด:</span>
+                                        {task.outcome}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Checklist / Subtasks */}
+                                  {task.checklist && task.checklist.length > 0 && (
+                                    <div className="mt-3 pt-2.5 border-t border-slate-800/80">
+                                      <div className="text-[11px] font-medium text-slate-400 mb-1.5 flex items-center gap-1">
+                                        <i data-lucide="check-square" className="w-3.5 h-3.5 text-slate-400"></i>
+                                        <span>เช็คลิสต์ย่อย ({task.checklist.filter(c => c.done).length}/{task.checklist.length})</span>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        {task.checklist.map(item => (
+                                          <div
+                                            key={item.id}
+                                            onClick={() => toggleSubtask(task.id, item.id)}
+                                            className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer py-1 px-1.5 rounded hover:bg-slate-800/50"
+                                          >
+                                            {item.done ? (
+                                              <i data-lucide="check-square" className="w-4 h-4 text-rose-400 shrink-0"></i>
+                                            ) : (
+                                              <i data-lucide="square" className="w-4 h-4 text-slate-600 shrink-0"></i>
+                                            )}
+                                            <span className={item.done ? 'line-through text-slate-500' : ''}>
+                                              {item.text}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Action Buttons */}
+                                  <div className="mt-3 pt-2 flex justify-end gap-2 text-xs border-t border-slate-800/40">
+                                    <button
+                                      onClick={() => handleOpenModal(task)}
+                                      className="px-2.5 py-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition flex items-center gap-1"
+                                    >
+                                      <i data-lucide="edit-3" className="w-3.5 h-3.5"></i>
+                                      <span>แก้ไข</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteTask(task.id)}
+                                      className="px-2.5 py-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition flex items-center gap-1"
+                                    >
+                                      <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
+                                      <span>ลบ</span>
+                                    </button>
+                                  </div>
+
+                                </div>
+
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                    </div>
+                  );
+                })}
+
+              </main>
+
+              {}
+              {/* Modal Dialog for Add / Edit Task */}
+              {isModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                  <div className="bg-[#16161c] border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden my-8">
+                    
+                    {/* Modal Header */}
+                    <div className="flex justify-between items-center p-4 md:p-5 border-b border-slate-800">
+                      <h2 className="text-base md:text-lg font-bold text-slate-100 flex items-center gap-2">
+                        <i data-lucide="layers" className="w-5 h-5 text-rose-400"></i>
+                        {editingTask ? 'แก้ไขภารกิจ' : 'สร้างภารกิจใหม่'}
+                      </h2>
+                      <button 
+                        onClick={() => setIsModalOpen(false)}
+                        className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                      >
+                        <i data-lucide="x" className="w-5 h-5"></i>
+                      </button>
+                    </div>
+
+                    {/* Modal Form */}
+                    <form onSubmit={handleSaveTask} className="p-4 md:p-5 space-y-4">
+                      
+                      {/* Title */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">ชื่อภารกิจ / งานที่ต้องทำ *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="เช่น เขียนสรุปรายงาน, ออกกำลังกาย..."
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          className="w-full bg-[#0d0d11] border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-rose-500"
+                        />
+                      </div>
+
+                      {/* Duration Inputs (Hours & Minutes) */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">ระยะเวลาที่คาดว่าจะใช้ทำ</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max="24"
+                                value={formData.hours}
+                                onChange={(e) => setFormData({ ...formData, hours: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-[#0d0d11] border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-rose-500"
+                              />
+                              <span className="text-xs text-slate-400">ชั่วโมง</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max="59"
+                                step="5"
+                                value={formData.minutes}
+                                onChange={(e) => setFormData({ ...formData, minutes: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-[#0d0d11] border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-rose-500"
+                              />
+                              <span className="text-xs text-slate-400">นาที</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Priority Ranking Selection */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">จัดอยู่ในกลุ่มความสำคัญ (Priority Ranking)</label>
+                        <select
+                          value={formData.priority}
+                          onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                          className="w-full bg-[#0d0d11] border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="high">🔴 ด่วนและสำคัญมาก (High Priority)</option>
+                          <option value="medium">🟡 สำคัญปานกลาง (Medium Priority)</option>
+                          <option value="low">🟢 ทั่วไป / สำคัญน้อย (Low Priority)</option>
+                        </select>
+                      </div>
+
+                      {/* Expected Outcome */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                          ผลลัพธ์ที่จะเกิดขึ้นเมื่อทำเสร็จ (Outcome)
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="เช่น ปิดการขายได้, งานเสร็จทันเดดไลน์, สุขภาพแข็งแรง..."
+                          value={formData.outcome}
+                          onChange={(e) => setFormData({ ...formData, outcome: e.target.value })}
+                          className="w-full bg-[#0d0d11] border border-slate-800 rounded-xl p-3 text-slate-100 text-sm focus:outline-none focus:border-rose-500"
+                        />
+                      </div>
+
+                      {/* Checklist Subtasks */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">ขั้นตอนย่อย / เช็คลิสต์</label>
+                        
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            placeholder="เพิ่มขั้นตอนย่อย..."
+                            value={newChecklistText}
+                            onChange={(e) => setNewChecklistText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddChecklist();
+                              }
+                            }}
+                            className="flex-1 bg-[#0d0d11] border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:border-rose-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddChecklist}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium"
+                          >
+                            เพิ่ม
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                          {formData.checklist.map(item => (
+                            <div key={item.id} className="flex items-center justify-between p-2 bg-[#0d0d11] rounded-lg border border-slate-800 text-xs">
+                              <span className="text-slate-300">{item.text}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveChecklist(item.id)}
+                                className="text-slate-500 hover:text-rose-400 p-1"
+                              >
+                                <i data-lucide="x" className="w-3.5 h-3.5"></i>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Form Action Buttons */}
+                      <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setIsModalOpen(false)}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition"
+                        >
+                          ยกเลิก
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white rounded-xl text-xs font-medium shadow-lg shadow-rose-950/40 transition"
+                        >
+                          บันทึกภารกิจ
+                        </button>
+                      </div>
+
+                    </form>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          );
+        }
+
+        // Render React DOM
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
